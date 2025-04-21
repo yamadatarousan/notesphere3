@@ -169,6 +169,12 @@ return [
             'database' => env('REDIS_CACHE_DB', '1'),
         ],
 
+        'mysql_test' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'database' => env('DB_TEST_DATABASE', 'laravel_test'),
+        ],
+
     ],
 
 ];
