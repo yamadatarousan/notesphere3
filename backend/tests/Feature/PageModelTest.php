@@ -127,4 +127,68 @@ class PageModelTest extends TestCase
             'title' => 'New Page',
         ]);
     }
+
+    public function test_authenticated_user_can_retrieve_pages()
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token')->plainTextToken;
+        Page::factory()->count(2)->create(['user_id' => $user->id]);
+    
+        $response = $this->withHeaders([
+            'Authorization' => "Bearer $token",
+        ])->getJson('/api/pages');
+    
+        $response->assertStatus(200)
+                 ->assertJsonCount(2);
+    }
+    
+    public function test_authenticated_user_can_update_page()
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token')->plainTextToken;
+        $page = Page::factory()->create(['user_id' => $user->id]);
+    
+        $response = $this->withHeaders([
+            'Authorization' => "Bearer $token",
+        ])->putJson("/api/pages/{$page->id}", [
+            'title' => 'Updated Title',
+            'content' => 'Updated content',
+        ]);
+    
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('pages', [
+            'id' => $page->id,
+            'title' => 'Updated Title',
+        ]);
+    }
+    
+    public function test_authenticated_user_cannot_update_other_users_page()
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $token = $user->createToken('test-token')->plainTextToken;
+        $page = Page::factory()->create(['user_id' => $otherUser->id]);
+    
+        $response = $this->withHeaders([
+            'Authorization' => "Bearer $token",
+        ])->putJson("/api/pages/{$page->id}", [
+            'title' => 'Unauthorized Update',
+        ]);
+    
+        $response->assertStatus(403);
+    }
+    
+    public function test_authenticated_user_can_delete_page()
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token')->plainTextToken;
+        $page = Page::factory()->create(['user_id' => $user->id]);
+    
+        $response = $this->withHeaders([
+            'Authorization' => "Bearer $token",
+        ])->deleteJson("/api/pages/{$page->id}");
+    
+        $response->assertStatus(204);
+        $this->assertDatabaseMissing('pages', ['id' => $page->id]);
+    }
 }
