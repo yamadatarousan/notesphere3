@@ -1,24 +1,17 @@
 <?php
 
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\API\PageController;
+use App\Http\Controllers\AuthController;
+use Illuminate\Http\Request;
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-
-Route::post('/login', function (Request $request) {
-    $credentials = $request->only('email', 'password');
-    if (Auth::attempt($credentials)) {
-        $user = Auth::user();
-        $token = $user->createToken('api-token')->plainTextToken;
-        return response()->json(['token' => $token]);
-    }
-    return response()->json(['error' => 'Unauthorized'], 401);
-});
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    })->name('user');
+
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
     Route::apiResource('pages', PageController::class);
 });
