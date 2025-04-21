@@ -13,7 +13,8 @@ class PageController extends Controller
      */
     public function index()
     {
-        //
+        $pages = auth()->user()->pages()->with('children')->get();
+        return response()->json($pages);
     }
 
     /**
@@ -37,7 +38,8 @@ class PageController extends Controller
      */
     public function show(Page $page)
     {
-        //
+        $this->authorize('view', $page); // 認可チェック（後述）
+        return response()->json($page->load('children'));
     }
 
     /**
@@ -45,7 +47,16 @@ class PageController extends Controller
      */
     public function update(Request $request, Page $page)
     {
-        //
+        $this->authorize('update', $page);
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'content' => 'nullable|string',
+            'parent_id' => 'nullable|exists:pages,id',
+            'is_public' => 'boolean',
+        ]);
+    
+        $page->update($validated);
+        return response()->json($page);
     }
 
     /**
@@ -53,6 +64,8 @@ class PageController extends Controller
      */
     public function destroy(Page $page)
     {
-        //
+        $this->authorize('delete', $page);
+        $page->delete();
+        return response()->json(null, 204);
     }
 }
