@@ -11,4 +11,9 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory;
 
     protected $fillable = ['name', 'email', 'password'];
+
+    public function pages()
+    {
+        return $this->hasMany(Page::class);
+    }
 }

@@ -109,4 +109,22 @@ class PageModelTest extends TestCase
         $this->assertCount(2, $userPages);
     }
 
+    public function test_authenticated_user_can_create_page()
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test-token')->plainTextToken;
+    
+        $response = $this->withHeaders([
+            'Authorization' => "Bearer $token",
+        ])->postJson('/api/pages', [
+            'title' => 'New Page',
+            'content' => 'Page content',
+        ]);
+    
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('pages', [
+            'user_id' => $user->id,
+            'title' => 'New Page',
+        ]);
+    }
 }

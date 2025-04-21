@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\API\PageController;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -16,4 +17,8 @@ Route::post('/login', function (Request $request) {
         return response()->json(['token' => $token]);
     }
     return response()->json(['error' => 'Unauthorized'], 401);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('pages', PageController::class);
 });
