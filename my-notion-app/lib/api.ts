@@ -1,4 +1,3 @@
-// lib/api.ts
 export const fetchPages = async (token: string) => {
     const response = await fetch('http://localhost:8000/api/pages', {
         headers: {
@@ -35,13 +34,18 @@ export const updatePage = async (id: number, data: { title: string; content?: st
     return response.json();
 };
 
-export const deletePage = async (id: number, token: string) => {
+export async function deletePage(id: number, token: string) {
+    console.log('Sending deletePage request for id:', id, 'with token:', token);
     const response = await fetch(`http://localhost:8000/api/pages/${id}`, {
         method: 'DELETE',
         headers: {
-            Authorization: `Bearer ${token}`,
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
         },
     });
-    if (!response.ok) throw new Error('Failed to delete page');
-    return response.status;
-};
+    if (!response.ok) {
+        throw new Error(`Delete failed: ${response.status}`);
+    }
+    console.log('deletePage response:', response.status);
+    return; // 204 No Content なら何も返さない
+}
