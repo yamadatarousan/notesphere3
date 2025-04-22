@@ -120,7 +120,11 @@ export default function Home() {
 
     // 編集開始
     const startEditing = (page: { id: number; title: string; content: string; parent_id: number | null }) => {
-        setEditingPage(page);
+        const sanitizedContent = sanitizeHtml(page.content, {
+            allowedTags: ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'br'],
+            allowedAttributes: {}
+        });
+        setEditingPage({ ...page, content: sanitizedContent });
     };
 
     // 編集キャンセル

@@ -32,12 +32,16 @@ class PageController extends Controller
             'parent_id' => 'nullable|exists:pages,id',
             'is_public' => 'boolean',
         ]);
-
-        // content をサニタイズ
+    
         if (isset($validated['content'])) {
-            $validated['content'] = Purify::clean($validated['content']);
+            \Log::info('Before Purify:', ['content' => $validated['content']]);
+            $validated['content'] = Purify::clean($validated['content'], [
+                'HTML.Allowed' => 'p,br,strong,em,ul,ol,li,h1,h2,h3,code,pre',
+                'HTML.ForbiddenElements' => ['script', 'iframe', 'object', 'embed'],
+            ]);
+            \Log::info('After Purify:', ['content' => $validated['content']]);
         }
-
+    
         $page = auth()->user()->pages()->create($validated);
         return response()->json($page, 201);
     }
@@ -65,14 +69,17 @@ class PageController extends Controller
             'is_public' => 'boolean',
         ]);
     
-        // 循環参照防止
         if (isset($validated['parent_id']) && $validated['parent_id'] == $page->id) {
             return response()->json(['error' => 'Cannot set page as its own parent'], 422);
         }
     
-        // content をサニタイズ
         if (isset($validated['content'])) {
-            $validated['content'] = Purify::clean($validated['content']);
+            \Log::info('Before Purify:', ['content' => $validated['content']]);
+            $validated['content'] = Purify::clean($validated['content'], [
+                'HTML.Allowed' => 'p,br,strong,em,ul,ol,li,h1,h2,h3,code,pre',
+                'HTML.ForbiddenElements' => ['script', 'iframe', 'object', 'embed'],
+            ]);
+            \Log::info('After Purify:', ['content' => $validated['content']]);
         }
     
         $page->update($validated);
