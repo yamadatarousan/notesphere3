@@ -3,7 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { fetchPages, createPage, updatePage, deletePage } from '../lib/api';
-import { logout } from '../lib/auth'; // ここを修正
+import { logout } from '../lib/auth';
+import { Toaster, toast } from 'react-hot-toast';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import 'tailwindcss/tailwind.css'; // Tailwind のスタイル
 
 export default function Home() {
     const router = useRouter();
@@ -12,14 +16,22 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // トークン取得
+    // Tiptap エディター
+    const editor = useEditor({
+        extensions: [StarterKit],
+        content: '',
+        onUpdate: ({ editor }) => {
+            const html = editor.getHTML();
+            console.log('Editor content:', html);
+        },
+    });
+
     useEffect(() => {
         const storedToken = localStorage.getItem('token');
         console.log('Token loaded:', storedToken || 'none');
         setToken(storedToken || '');
     }, []);
 
-    // ページ一覧取得
     const loadPages = async () => {
         if (!token) {
             console.log('No token, skipping loadPages');
@@ -34,65 +46,70 @@ export default function Home() {
             setError(null);
         } catch (err) {
             console.error('Fetch pages error:', err);
-            setError('Failed to fetch pages');
+            setError('ページの取得に失敗しました');
+            toast.error('ページの取得に失敗しました');
         } finally {
             setIsLoading(false);
         }
     };
 
-    // トークン変更時にページ取得
     useEffect(() => {
         console.log('Token changed, loading pages:', token || 'none');
         loadPages();
     }, [token]);
 
-    // ページ作成
     const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!token) return;
+        if (!token || !editor) return;
         const form = e.currentTarget;
         const title = form.title.value;
+        const content = editor.getHTML();
         try {
-            console.log('Creating page:', title);
-            await createPage({ title }, token);
+            console.log('Creating page:', title, content);
+            await createPage({ title, content }, token);
             console.log('Page created, reloading pages');
+            toast.success('ページを作成しました');
             await loadPages();
             form.reset();
+            editor.commands.setContent('');
         } catch (err) {
             console.error('Create page error:', err);
-            setError('Failed to create page');
+            setError('ページの作成に失敗しました');
+            toast.error('ページの作成に失敗しました');
         }
     };
 
-    // ページ更新
     const handleUpdate = async (id: number, title: string) => {
-        if (!token) return;
+        if (!token || !editor) return;
+        const content = editor.getHTML();
         try {
-            console.log('Updating page:', id, title);
-            await updatePage(id, { title }, token);
+            console.log('Updating page:', id, title, content);
+            await updatePage(id, { title, content }, token);
             console.log('Page updated, reloading pages');
+            toast.success('ページを更新しました');
             await loadPages();
         } catch (err) {
             console.error('Update page error:', err);
-            setError('Failed to update page');
+            setError('ページの更新に失敗しました');
+            toast.error('ページの更新に失敗しました');
         }
     };
 
-    // ページ削除
     const handleDelete = async (id: number) => {
         if (!token) return;
         try {
             console.log('Deleting page:', id);
             await deletePage(id, token);
             console.log('Page deleted, reloading pages');
+            toast.success('ページを削除しました');
             await loadPages();
         } catch (err) {
             console.error('Delete page error:', err);
-            setError('Failed to delete page');
+            setError('ページの削除に失敗しました');
+            toast.error('ページの削除に失敗しました');
         }
     };
 
-    // ログアウト
     const handleLogout = async () => {
         if (!token) return;
         try {
@@ -102,19 +119,19 @@ export default function Home() {
             localStorage.removeItem('token');
             setToken('');
             router.push('/login');
+            toast.success('ログアウトしました');
         } catch (err) {
             console.error('Logout error:', err);
-            setError('Failed to logout');
+            setError('ログアウトに失敗しました');
+            toast.error('ログアウトに失敗しました');
         }
     };
 
-    // トークン読み込み中
     if (token === null) {
         console.log('Token is null, showing loading');
         return <div>Loading...</div>;
     }
 
-    // トークンがない場合
     if (!token) {
         console.log('No token, showing login prompt');
         return (
@@ -130,10 +147,9 @@ export default function Home() {
         );
     }
 
-    // ページ読み込み中、エラー、データなし
     if (isLoading) {
         console.log('Pages loading');
-        return <div>Loading...</div>;
+        return <div className="spinner">Loading...</div>;
     }
     if (error) {
         console.log('Error occurred:', error);
@@ -148,6 +164,7 @@ export default function Home() {
 
     return (
         <div className="container mx-auto p-4">
+            <Toaster />
             <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold">My Pages</h1>
                 <button
@@ -162,9 +179,10 @@ export default function Home() {
                     type="text"
                     name="title"
                     placeholder="Page title"
-                    className="border p-2 mr-2 rounded"
+                    className="border p-2 mr-2 rounded w-full mb-2"
                     required
                 />
+                <EditorContent editor={editor} className="border p-2 rounded mb-2" />
                 <button type="submit" className="bg-blue-500 text-white p-2 rounded">
                     Create Page
                 </button>
@@ -172,7 +190,12 @@ export default function Home() {
             <ul>
                 {pages.map((page: any) => (
                     <li key={page.id} className="p-2 border-b flex justify-between">
-                        {page.title}
+                        <div>
+                            <div>{page.title}</div>
+                            <div className="text-gray-500 text-sm">
+                                {page.content ? page.content.substring(0, 50) + '...' : 'No content'}
+                            </div>
+                        </div>
                         <div>
                             <button
                                 onClick={() => handleUpdate(page.id, `Updated ${page.title}`)}
