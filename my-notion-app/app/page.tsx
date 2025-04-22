@@ -7,17 +7,19 @@ import { logout } from '../lib/auth';
 import { Toaster, toast } from 'react-hot-toast';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import sanitizeHtml from 'sanitize-html';
 import 'tailwindcss/tailwind.css';
 
+// ホームコンポーネント：ページ一覧、作成、編集、削除、ログアウト
 export default function Home() {
     const router = useRouter();
-    const [token, setToken] = useState<string | null>(null);
-    const [pages, setPages] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [editingPage, setEditingPage] = useState<{ id: number; title: string; content: string } | null>(null);
+    const [token, setToken] = useState<string | null>(null); // 認証トークン
+    const [pages, setPages] = useState<any[]>([]); // ページ一覧
+    const [isLoading, setIsLoading] = useState(false); // ローディング状態
+    const [error, setError] = useState<string | null>(null); // エラー状態
+    const [editingPage, setEditingPage] = useState<{ id: number; title: string; content: string; parent_id: number | null } | null>(null); // 編集中のページ
 
-    // Tiptap エディター
+    // Tiptap エディター設定
     const editor = useEditor({
         extensions: [StarterKit],
         content: editingPage ? editingPage.content : '',
@@ -26,18 +28,21 @@ export default function Home() {
         },
     });
 
+    // 編集ページ変更時にエディター内容を更新
     useEffect(() => {
         if (editingPage && editor) {
             editor.commands.setContent(editingPage.content || '');
         }
     }, [editingPage, editor]);
 
+    // トークン読み込み
     useEffect(() => {
         const storedToken = localStorage.getItem('token');
         console.log('Token loaded:', storedToken || 'none');
         setToken(storedToken || '');
     }, []);
 
+    // ページ一覧取得
     const loadPages = async () => {
         if (!token) {
             console.log('No token, skipping loadPages');
@@ -59,20 +64,23 @@ export default function Home() {
         }
     };
 
+    // トークン変更時にページを再取得
     useEffect(() => {
         console.log('Token changed, loading pages:', token || 'none');
         loadPages();
     }, [token]);
 
+    // ページ作成
     const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!token || !editor) return;
         const form = e.currentTarget;
         const title = form.title.value;
         const content = editor.getHTML();
+        const parent_id = form.parent_id.value || null;
         try {
-            console.log('Creating page:', title, content);
-            await createPage({ title, content }, token);
+            console.log('Creating page:', title, content, parent_id);
+            await createPage({ title, content, parent_id }, token);
             console.log('Page created, reloading pages');
             toast.success('ページを作成しました');
             await loadPages();
@@ -85,15 +93,17 @@ export default function Home() {
         }
     };
 
+    // ページ更新
     const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!token || !editor || !editingPage) return;
         const form = e.currentTarget;
         const title = form.title.value;
         const content = editor.getHTML();
+        const parent_id = form.parent_id.value || null;
         try {
-            console.log('Updating page:', editingPage.id, title, content);
-            await updatePage(editingPage.id, { title, content }, token);
+            console.log('Updating page:', editingPage.id, title, content, parent_id);
+            await updatePage(editingPage.id, { title, content, parent_id }, token);
             console.log('Page updated, reloading pages');
             toast.success('ページを更新しました');
             await loadPages();
@@ -102,15 +112,18 @@ export default function Home() {
             form.reset();
         } catch (err) {
             console.error('Update page error:', err);
-            setError('ページの更新に失敗しました');
-            toast.error('ページの更新に失敗しました');
+            const errorMessage = err.response?.data?.error || 'ページの更新に失敗しました';
+            setError(errorMessage);
+            toast.error(errorMessage);
         }
     };
 
-    const startEditing = (page: { id: number; title: string; content: string }) => {
+    // 編集開始
+    const startEditing = (page: { id: number; title: string; content: string; parent_id: number | null }) => {
         setEditingPage(page);
     };
 
+    // 編集キャンセル
     const cancelEditing = () => {
         setEditingPage(null);
         if (editor) {
@@ -118,6 +131,7 @@ export default function Home() {
         }
     };
 
+    // ページ削除
     const handleDelete = async (id: number) => {
         if (!token) return;
         try {
@@ -133,6 +147,7 @@ export default function Home() {
         }
     };
 
+    // ログアウト
     const handleLogout = async () => {
         if (!token) return;
         try {
@@ -150,6 +165,62 @@ export default function Home() {
         }
     };
 
+    // ツリー構築
+    const buildTree = (pages: any[]) => {
+        const map = {};
+        const tree = [];
+        pages.forEach(page => map[page.id] = { ...page, children: [] });
+        pages.forEach(page => {
+            if (page.parent_id && map[page.parent_id]) {
+                map[page.parent_id].children.push(map[page.id]);
+            } else {
+                tree.push(map[page.id]);
+            }
+        });
+        return tree;
+    };
+
+    // ツリーノードコンポーネント
+    const TreeNode = ({ page }: { page: any }) => (
+        <li className="p-2 border-b">
+            <div className="flex justify-between">
+                <div>
+                    <div>{page.title}</div>
+                    <div className="text-gray-500 text-sm">
+                        {page.content
+                            ? sanitizeHtml(page.content, {
+                                  allowedTags: ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'br'],
+                                  allowedAttributes: {}
+                              }).substring(0, 50) + '...'
+                            : 'No content'}
+                    </div>
+                </div>
+                <div>
+                    <button
+                        onClick={() => startEditing(page)}
+                        className="text-blue-500 mr-2"
+                    >
+                        Edit
+                    </button>
+                    <button
+                        onClick={() => handleDelete(page.id)}
+                        className="text-red-500"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+            {page.children.length > 0 && (
+                <ul className="ml-4">
+                    {page.children.map((child: any) => (
+                        <TreeNode key={child.id} page={child} />
+                    ))}
+                </ul>
+            )}
+        </li>
+    );
+
+    // ローディングやエラー時のレンダリング
     if (token === null) {
         console.log('Token is null, showing loading');
         return <div>Loading...</div>;
@@ -185,6 +256,7 @@ export default function Home() {
 
     console.log('Rendering pages:', pages);
 
+    // メインUI
     return (
         <div className="container mx-auto p-4">
             <Toaster />
@@ -206,6 +278,18 @@ export default function Home() {
                     className="border p-2 mr-2 rounded w-full mb-2"
                     required
                 />
+                <select
+                    name="parent_id"
+                    defaultValue={editingPage ? editingPage.parent_id || '' : ''}
+                    className="border p-2 rounded w-full mb-2"
+                >
+                    <option value="">No Parent</option>
+                    {pages.map(page => (
+                        <option key={page.id} value={page.id}>
+                            {page.title}
+                        </option>
+                    ))}
+                </select>
                 <EditorContent editor={editor} className="border p-2 rounded mb-2" />
                 <div className="flex gap-2">
                     <button type="submit" className="bg-blue-500 text-white p-2 rounded">
@@ -223,29 +307,8 @@ export default function Home() {
                 </div>
             </form>
             <ul>
-                {pages.map((page: any) => (
-                    <li key={page.id} className="p-2 border-b flex justify-between">
-                        <div>
-                            <div>{page.title}</div>
-                            <div className="text-gray-500 text-sm">
-                                {page.content ? page.content.substring(0, 50) + '...' : 'No content'}
-                            </div>
-                        </div>
-                        <div>
-                            <button
-                                onClick={() => startEditing(page)}
-                                className="text-blue-500 mr-2"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                onClick={() => handleDelete(page.id)}
-                                className="text-red-500"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </li>
+                {buildTree(pages).map((page: any) => (
+                    <TreeNode key={page.id} page={page} />
                 ))}
             </ul>
         </div>
